@@ -1,0 +1,225 @@
+# MindTrack – Codex Instruction File
+# Purpose: Clean/repair the current frontend, enforce standards, and validate a working build.
+# Scope: Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, SWR, Recharts, react-calendar.
+
+meta:
+  project: MindTrack
+  owner: om-umrania
+  repo_url: https://github.com/om-umrania/Mindtrack
+  intent: >
+    Repair and standardize the frontend per the 2-Day Build Plan: pages (/login,/dashboard,/habits,/analytics),
+    shadcn/ui components, optimistic check-ins, analytics/trends, AI panel with mock endpoints.
+    Produce a clean, reproducible state that typechecks, lints, and builds.
+  references:
+    - "MindTrack (AI-assisted Wellness & Habit Tracker) — 2-Day Build Plan"
+
+environment:
+  os_image: ubuntu-24.04
+  node:
+    version: "20.x"          # Stable for Next.js 15
+    package_manager: npm     # Use pnpm if pnpm-lock.yaml exists
+  caching: true
+  internet: true
+  workspace_dir: /workspace/Mindtrack
+  env:
+    NODE_ENV: development
+    NEXT_TELEMETRY_DISABLED: "1"
+    NEXT_PUBLIC_DEMO: "true"       # can toggle off later
+    NEXT_PUBLIC_AI_ON: "false"     # avoid external calls during repair
+
+checkout:
+  # If repo already mounted in /workspace/Mindtrack, skip clone.
+  steps:
+    - if: "! -d .git"
+      run: |
+        if [ -n "${GITHUB_TOKEN:-}" ]; then
+          git clone https://oauth2:${GITHUB_TOKEN}@github.com/om-umrania/Mindtrack.git .
+        else
+          git clone https://github.com/om-umrania/Mindtrack.git .
+        fi
+        git fetch --all --tags
+
+setup:
+  steps:
+    - run: |
+        # Node & tooling
+        corepack enable || true
+        corepack prepare pnpm@9 --activate || true
+        if [ -f pnpm-lock.yaml ]; then
+          pnpm install --frozen-lockfile || pnpm install
+        elif [ -f package-lock.json ]; then
+          npm ci || npm install
+        else
+          npm install
+        fi
+
+    - name: Verify Next/Tailwind/shadcn wiring (idempotent fixes allowed)
+      run: |
+        # Ensure Tailwind content globs include app & components
+        TCFG="tailwind.config.ts"
+        if [ -f "$TCFG" ]; then
+          sed -i 's/content: \[[^]]*\]/content: \[".\/app\/*\*\/\*{js,ts,jsx,tsx,mdx}","\.\/components\/*\*\/\*{js,ts,jsx,tsx}","\.\/src\/*\*\/\*{js,ts,jsx,tsx,mdx}"\]/' "$TCFG" || true
+        fi
+
+        # Ensure next.config exists
+        [ -f next.config.mjs ] || printf 'export default { reactStrictMode: true };\n' > next.config.mjs
+
+        # Create .gitignore if missing
+        [ -f .gitignore ] || cat > .gitignore <<'EOF'
+        .next
+        node_modules
+        .env*
+        .DS_Store
+        *.log
+        coverage
+        EOF
+
+clean_and_repair:
+  goals:
+    - Remove dead imports/unused files; normalize module paths to "@/*".
+    - Fix TypeScript errors and strictness regressions.
+    - Align shadcn/ui directory structure under components/ui.
+    - Ensure app routes exist and compile: /login, /dashboard, /habits, /analytics.
+    - Mock API routes compile: /api/auth/login, /api/habits, /api/checkins, /api/analytics/summary, /api/ai/nudge, /api/ai/recommendations.
+    - Guarantee idempotent dev start: `npm run dev` works without interactive prompts.
+
+  steps:
+    - name: ESLint autofix
+      run: |
+        # Provide sane defaults if config missing
+        if [ ! -f .eslintrc.json ] && [ ! -f .eslintrc.cjs ]; then
+          cat > .eslintrc.json <<'JSON'
+          {
+            "extends": ["next/core-web-vitals","eslint:recommended","plugin:@typescript-eslint/recommended"],
+            "parser": "@typescript-eslint/parser",
+            "plugins": ["@typescript-eslint"],
+            "rules": {
+              "@typescript-eslint/no-unused-vars": ["warn", {"argsIgnorePattern":"^_"}]
+            }
+          }
+          JSON
+        fi
+        npx eslint . --ext .ts,.tsx --fix || true
+
+    - name: Prettier format
+      run: |
+        npx prettier . -w || true
+
+    - name: Typecheck (fail-soft pass 1)
+      continue_on_error: true
+      run: |
+        # Provide script if missing
+        jq '."scripts"."typecheck" //= "tsc --noEmit"' package.json | sponge package.json || true
+        npm run typecheck || true
+
+    - name: Guided repairs for common TS/Next errors
+      run: |
+        # 1) Missing "use client" on client components
+        grep -Rl --include='*.tsx' 'use client' app/components 2>/dev/null || true
+        # 2) Bad default exports or missing export on pages/components
+        # (Codex: where compilation fails due to unresolved symbols, open files and fix imports/exports.)
+        echo "Codex: Inspect tsc output and fix symbol/route/import errors."
+
+    - name: Verify routes & stubs
+      run: |
+        mkdir -p app/{login,dashboard,habits,analytics}
+        for p in login dashboard habits analytics; do
+          [ -f "app/$p/page.tsx" ] || cat > "app/$p/page.tsx" <<'TSX'
+          export default function Page(){ return <div className="p-6">Placeholder</div> }
+          TSX
+        done
+
+    - name: Ensure shadcn/ui components
+      run: |
+        mkdir -p components/ui
+        # Create minimal Button/Card if missing so imports resolve
+        [ -f components/ui/button.tsx ] || cat > components/ui/button.tsx <<'TSX'
+        import * as React from "react";
+        import { cn } from "@/lib/utils";
+        export function Button({className,...props}:{className?:string}&React.ButtonHTMLAttributes<HTMLButtonElement>){
+          return <button className={cn("inline-flex items-center rounded-md px-3 py-2 text-sm",className)} {...props} />;
+        }
+        TSX
+        [ -f components/ui/card.tsx ] || cat > components/ui/card.tsx <<'TSX'
+        import * as React from "react";
+        export function Card({children,className}:{children:React.ReactNode,className?:string}){return <div className={"rounded-xl border p-4 "+(className||"")}>{children}</div>;}
+        TSX
+
+    - name: Mock API endpoints (idempotent)
+      run: |
+        mkdir -p app/api/{auth/login,habbits,habits,checkins,analytics/summary,ai/nudge,ai/recommendations}/route.ts 2>/dev/null || true
+        # auth/login
+        cat > app/api/auth/login/route.ts <<'TS'
+        import { NextResponse } from "next/server";
+        export async function POST(){ return NextResponse.json({ ok:true, user:{ id:"demo", name:"Demo User", email:"demo@mindtrack.app"} }); }
+        TS
+        # habits GET/POST
+        cat > app/api/habits/route.ts <<'TS'
+        import { NextResponse } from "next/server";
+        let HABITS=[{id:"h1",userId:"demo",name:"Water",targetType:"count",targetValue:8,isActive:true},
+                    {id:"h2",userId:"demo",name:"Journaling",targetType:"boolean",targetValue:1,isActive:true}];
+        export async function GET(){ return NextResponse.json(HABITS); }
+        export async function POST(req:Request){
+          const body=await req.json(); const h={ id:crypto.randomUUID(), userId:"demo", isActive:true, ...body };
+          HABITS.push(h); return NextResponse.json(h,{status:201});
+        }
+        TS
+        # checkins bulk upsert
+        cat > app/api/checkins/route.ts <<'TS'
+        import { NextResponse } from "next/server";
+        export async function POST(){ return NextResponse.json({ ok:true }); }
+        TS
+        # analytics summary
+        mkdir -p app/api/analytics/summary
+        cat > app/api/analytics/summary/route.ts <<'TS'
+        import { NextResponse } from "next/server";
+        const D=(d:Date)=>d.toISOString().slice(0,10);
+        export async function GET(req:Request){
+          const url=new URL(req.url); const window=url.searchParams.get("window")||"7";
+          const n=window==="28"?28:7;
+          const today=new Date(); const data=Array.from({length:n},(_,i)=>({date:D(new Date(today.getTime()- (n-1-i)*86400000)), pct: Math.round(60+30*Math.sin(i/3))}));
+          return NextResponse.json({ window, completionPct: data[data.length-1].pct, currentStreaks:[{habitId:"h1",days:3}], heatmap:data, leaderboard:[{habitId:"h1",adherence:92},{habitId:"h2",adherence:71}]});
+        }
+        TS
+        # ai
+        mkdir -p app/api/ai/nudge app/api/ai/recommendations
+        cat > app/api/ai/nudge/route.ts <<'TS'
+        import { NextResponse } from "next/server";
+        export async function POST(){ return NextResponse.json({ message:"3-day streak on Journaling—try 5 minutes tonight.", context:{rule:"celebrate_small_wins"} }); }
+        TS
+        cat > app/api/ai/recommendations/route.ts <<'TS'
+        import { NextResponse } from "next/server";
+        export async function GET(){ return NextResponse.json([{habitName:"Evening Walk 10 min", rationale:"adjacent to existing steps habit"},{habitName:"Water +1 in morning", rationale:"micro-target ramp"}]); }
+        TS
+
+verification:
+  steps:
+    - name: Re-lint (no autofix)
+      run: npx eslint . --ext .ts,.tsx || true
+    - name: Typecheck (hard fail)
+      run: npm run typecheck
+    - name: Build
+      run: npm run build
+    - name: Dev smoke (non-blocking)
+      continue_on_error: true
+      run: |
+        timeout 5 npm run dev || true
+  exit_criteria:
+    - "npm run build exits 0"
+    - "npm run typecheck exits 0"
+    - "No ESLint errors of severity 'error' remain"
+    - "App routes compile: /login, /dashboard, /habits, /analytics"
+    - "API routes compile: /api/auth/login, /api/habits, /api/checkins, /api/analytics/summary, /api/ai/nudge, /api/ai/recommendations"
+
+reporting:
+  artifacts:
+    - path: . # keep default workspace
+  outputs:
+    - "Generate a concise FIXLOG.md summarizing each repair (file, change, rationale)."
+    - "Print remaining TODOs with actionable diffs if any check fails."
+
+guardrails:
+  - "Do not introduce new runtime deps without updating package.json and installing."
+  - "Prefer additive, idempotent fixes; avoid invasive refactors."
+  - "If a step fails, annotate why in FIXLOG.md and propose the minimal code diff."
+  - "Never remove app/ or components/ui; if missing, recreate minimal versions as above."
