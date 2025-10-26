@@ -2,7 +2,7 @@
 
 import { AI_ON } from "@/src/server/env";
 import { withRateLimit, jsonOk, jsonErr } from "@/src/server/http";
-import { getRepo } from "@/src/server/repo";
+import { getRepoCached } from "@/src/server/repo";
 import type { IRepository } from "@/src/server/interfaces";
 import type { NudgeRequest, Nudge } from "@/app/lib/types";
 
@@ -31,7 +31,7 @@ const FALLBACK_NUDGE: Nudge = {
 
 export const POST = withRateLimit(async (request: Request) => {
   try {
-    const repo = await getRepo();
+    const repo = await getRepoCached();
     const userId = await resolveDemoUserId(repo);
 
     if (!AI_ON) {

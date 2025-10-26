@@ -3,10 +3,10 @@ import { MemoryRepo } from "./adapters/memory";
 import type { IRepository } from "./interfaces";
 import { DATABASE_URL } from "./env";
 
-let repoPromise: Promise<IRepository> | null = null;
+let cachedRepo: Promise<IRepository> | null = null;
 let hasWarnedFallback = false;
 
-async function initializeRepository(): Promise<IRepository> {
+async function resolveRepository(): Promise<IRepository> {
   if (!DATABASE_URL) {
     console.warn("[repo] DATABASE_URL not set; using in-memory repository.");
     return new MemoryRepo();
@@ -33,12 +33,12 @@ async function initializeRepository(): Promise<IRepository> {
 }
 
 export function getRepo(): Promise<IRepository> {
-  if (!repoPromise) {
-    repoPromise = initializeRepository();
-  }
-  return repoPromise;
+  return resolveRepository();
 }
 
-export async function getRepoCached(): Promise<IRepository> {
-  return getRepo();
+export function getRepoCached(): Promise<IRepository> {
+  if (!cachedRepo) {
+    cachedRepo = resolveRepository();
+  }
+  return cachedRepo;
 }

@@ -2,7 +2,7 @@
 
 import { SummaryQuerySchema } from "@/src/server/validation";
 import { withRateLimit, jsonOk, jsonErr } from "@/src/server/http";
-import { getRepo } from "@/src/server/repo";
+import { getRepoCached } from "@/src/server/repo";
 import type { IRepository } from "@/src/server/interfaces";
 
 const DEMO_USER_ID = "demo";
@@ -30,7 +30,7 @@ export const GET = withRateLimit(async (request: Request) => {
       return jsonErr("Invalid summary parameters", 422);
     }
 
-    const repo = await getRepo();
+    const repo = await getRepoCached();
     const userId = await resolveDemoUserId(repo);
     const summary = await repo.analytics.summary(userId, parsed.data.window);
 

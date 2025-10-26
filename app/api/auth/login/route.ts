@@ -2,7 +2,7 @@
 
 import { AuthLoginSchema } from "@/src/server/validation";
 import { withRateLimit, jsonErr, jsonOk } from "@/src/server/http";
-import { getRepo } from "@/src/server/repo";
+import { getRepoCached } from "@/src/server/repo";
 
 export const POST = withRateLimit(async (request: Request) => {
   try {
@@ -13,7 +13,7 @@ export const POST = withRateLimit(async (request: Request) => {
       return jsonErr("Invalid request payload", 422);
     }
 
-    const repo = await getRepo();
+    const repo = await getRepoCached();
     const user = await repo.user.findOrCreateByEmail(parsed.data.email);
 
     return jsonOk(

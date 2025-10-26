@@ -1,10 +1,10 @@
 import packageJson from "@/package.json" assert { type: "json" };
-import { getRepo } from "@/src/server/repo";
+import { getRepoCached } from "@/src/server/repo";
 import { jsonOk, jsonErr } from "@/src/server/http";
 
 export async function GET(request: Request) {
   try {
-    const repo = await getRepo();
+    const repo = await getRepoCached();
     return jsonOk({
       ok: true,
       backend: repo.kind,
