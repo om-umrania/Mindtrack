@@ -75,6 +75,10 @@ const mapRecommendation = (
   rationale: recommendation.rationale,
 });
 
+const repoWarned = {
+  user: false,
+} as Record<"user", boolean>;
+
 class PrismaRepo implements IRepository {
   readonly kind = "prisma" as const;
   private client = getPrisma();
