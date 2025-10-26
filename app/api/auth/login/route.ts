@@ -14,7 +14,7 @@ export const POST = withRateLimit(async (request: Request) => {
     }
 
     const repo = await getRepo();
-    const user = await repo.findOrCreateUserByEmail(parsed.data.email);
+    const user = await repo.user.findOrCreateByEmail(parsed.data.email);
 
     return jsonOk(
       {

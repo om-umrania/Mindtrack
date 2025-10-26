@@ -8,12 +8,12 @@ import type { IRepository } from "@/src/server/interfaces";
 const DEMO_USER_ID = "demo";
 
 async function resolveDemoUserId(repo: IRepository): Promise<string> {
-  const existing = await repo.getUserById(DEMO_USER_ID);
+  const existing = await repo.user.getById(DEMO_USER_ID);
   if (existing) {
     return existing.id;
   }
 
-  const fallback = await repo.findOrCreateUserByEmail(
+  const fallback = await repo.user.findOrCreateByEmail(
     "demo@mindtrack.dev",
     "Demo",
   );
@@ -24,7 +24,7 @@ export const GET = withRateLimit(async (request: Request) => {
   try {
     const repo = await getRepo();
     const userId = await resolveDemoUserId(repo);
-    const habits = await repo.listHabits(userId);
+    const habits = await repo.habit.listByUser(userId);
     return jsonOk({ ok: true, habits });
   } catch (error) {
     console.error("[habits] failed to list habits", error);
@@ -43,7 +43,7 @@ export const POST = withRateLimit(async (request: Request) => {
 
     const repo = await getRepo();
     const userId = await resolveDemoUserId(repo);
-    const habit = await repo.createHabit(userId, parsed.data);
+    const habit = await repo.habit.create(userId, parsed.data);
 
     return jsonOk(
       {

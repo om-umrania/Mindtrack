@@ -10,7 +10,14 @@ import type {
   Summary,
   NudgeRequest,
 } from "@/app/lib/types";
-import type { IRepository } from "../interfaces";
+import type {
+  IRepository,
+  IUserRepo,
+  IHabitRepo,
+  ICheckinRepo,
+  IAnalyticsRepo,
+  IAIRepo,
+} from "../interfaces";
 import { buildSummary } from "../utils/summary";
 
 type MemoryCheckin = {
@@ -93,102 +100,103 @@ class MemoryRepo implements IRepository {
   private nudges: Nudge[] = [];
   private recommendations: Recommendation[] = [...initialRecommendations];
 
-  async findOrCreateUserByEmail(
-    email: string,
-    nameHint?: string,
-  ): Promise<User> {
-    const existing = this.users.find((user) => user.email === email);
-    if (existing) {
-      return existing;
-    }
-    const created: User = {
-      id: randomUUID(),
-      email,
-      name: nameHint ?? email.split("@")[0],
-    };
-    this.users.push(created);
-    return created;
-  }
-
-  async getUserById(id: string): Promise<User | null> {
-    return this.users.find((user) => user.id === id) ?? null;
-  }
-
-  async listHabits(userId: string): Promise<Habit[]> {
-    return this.habits.filter((habit) => habit.userId === userId);
-  }
-
-  async createHabit(userId: string, input: CreateHabitRequest): Promise<Habit> {
-    const habit: Habit = {
-      id: randomUUID(),
-      userId,
-      name: input.name,
-      targetType: input.targetType,
-      targetValue: input.targetValue,
-      isActive: true,
-    };
-    this.habits.push(habit);
-    return habit;
-  }
-
-  async upsertCheckins(items: UpsertCheckinsRequest["items"]): Promise<void> {
-    const today = startOfDay(new Date());
-    for (const item of items) {
-      const existing = this.checkins.find(
-        (checkin) =>
-          checkin.habitId === item.habitId &&
-          checkin.date.getTime() === today.getTime(),
-      );
+  readonly user: IUserRepo = {
+    findOrCreateByEmail: async (email: string, nameHint?: string) => {
+      const existing = this.users.find((user) => user.email === email);
       if (existing) {
-        existing.value = item.value;
-      } else {
-        this.checkins.push({
-          habitId: item.habitId,
-          date: today,
-          value: item.value,
-        });
+        return existing;
       }
-    }
-  }
+      const created: User = {
+        id: randomUUID(),
+        email,
+        name: nameHint ?? email.split("@")[0],
+      };
+      this.users.push(created);
+      return created;
+    },
+    getById: async (id: string) =>
+      this.users.find((user) => user.id === id) ?? null,
+  };
 
-  async getSummary(
-    userId: string,
-    window: "7" | "28" | "all",
-  ): Promise<Summary> {
-    const habits = this.habits.filter((habit) => habit.userId === userId);
-    const checkinsByHabit = habits.map((habit) => ({
-      id: habit.id,
-      checkins: this.checkins
-        .filter((checkin) => checkin.habitId === habit.id)
-        .map((checkin) => ({
-          date: checkin.date,
-          value: checkin.value,
-        })),
-    }));
-    return buildSummary(checkinsByHabit, window);
-  }
+  readonly habit: IHabitRepo = {
+    listByUser: async (userId: string) =>
+      this.habits.filter((habit) => habit.userId === userId),
+    create: async (userId: string, input: CreateHabitRequest) => {
+      const habit: Habit = {
+        id: randomUUID(),
+        userId,
+        name: input.name,
+        targetType: input.targetType,
+        targetValue: input.targetValue,
+        isActive: true,
+      };
+      this.habits.push(habit);
+      return habit;
+    },
+  };
 
-  async createNudge(userId: string, request: NudgeRequest): Promise<Nudge> {
-    const nudge: Nudge = {
-      id: randomUUID(),
-      userId,
-      createdAt: new Date().toISOString(),
-      channel: "inapp",
-      message:
-        typeof request.context?.message === "string"
-          ? request.context.message
-          : "Stay on track—log a habit update today!",
-      context: request.context ?? {},
-    };
-    this.nudges.push(nudge);
-    return nudge;
-  }
+  readonly checkin: ICheckinRepo = {
+    upsertToday: async (
+      _userId: string,
+      items: UpsertCheckinsRequest["items"],
+    ) => {
+      const today = startOfDay(new Date());
+      for (const item of items) {
+        const existing = this.checkins.find(
+          (checkin) =>
+            checkin.habitId === item.habitId &&
+            checkin.date.getTime() === today.getTime(),
+        );
+        if (existing) {
+          existing.value = item.value;
+        } else {
+          this.checkins.push({
+            habitId: item.habitId,
+            date: today,
+            value: item.value,
+          });
+        }
+      }
+    },
+  };
 
-  async listRecommendations(userId: string): Promise<Recommendation[]> {
-    return this.recommendations.filter(
-      (recommendation) => recommendation.userId === userId,
-    );
-  }
+  readonly analytics: IAnalyticsRepo = {
+    summary: async (userId: string, window: "7" | "28" | "all") => {
+      const habits = this.habits.filter((habit) => habit.userId === userId);
+      const checkinsByHabit = habits.map((habit) => ({
+        id: habit.id,
+        checkins: this.checkins
+          .filter((checkin) => checkin.habitId === habit.id)
+          .map((checkin) => ({
+            date: checkin.date,
+            value: checkin.value,
+          })),
+      }));
+      return buildSummary(checkinsByHabit, window);
+    },
+  };
+
+  readonly ai: IAIRepo = {
+    nudge: async (userId: string, request: NudgeRequest) => {
+      const nudge: Nudge = {
+        id: randomUUID(),
+        userId,
+        createdAt: new Date().toISOString(),
+        channel: "inapp",
+        message:
+          typeof request.context?.message === "string"
+            ? request.context.message
+            : "Stay on track—log a habit update today!",
+        context: request.context ?? {},
+      };
+      this.nudges.push(nudge);
+      return nudge;
+    },
+    recommendations: async (userId: string) =>
+      this.recommendations.filter(
+        (recommendation) => recommendation.userId === userId,
+      ),
+  };
 }
 
 export { MemoryRepo };

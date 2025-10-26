@@ -22,7 +22,14 @@ import type {
   UpsertCheckinsRequest,
   NudgeRequest,
 } from "@/app/lib/types";
-import type { IRepository } from "../interfaces";
+import type {
+  IRepository,
+  IUserRepo,
+  IHabitRepo,
+  ICheckinRepo,
+  IAnalyticsRepo,
+  IAIRepo,
+} from "../interfaces";
 import { buildSummary } from "../utils/summary";
 
 let prisma: PrismaClient | null = null;
@@ -72,116 +79,120 @@ class PrismaRepo implements IRepository {
   readonly kind = "prisma" as const;
   private client = getPrisma();
 
-  async findOrCreateUserByEmail(
-    email: string,
-    nameHint?: string,
-  ): Promise<User> {
-    const existing = await this.client.user.findUnique({ where: { email } });
-    if (existing) {
-      return mapUser(existing);
-    }
-    const created = await this.client.user.create({
-      data: {
-        email,
-        name: nameHint ?? email.split("@")[0],
-      },
-    });
-    return mapUser(created);
-  }
+  readonly user: IUserRepo = {
+    findOrCreateByEmail: async (email: string, nameHint?: string) => {
+      const existing = await this.client.user.findUnique({ where: { email } });
+      if (existing) {
+        return mapUser(existing);
+      }
+      const created = await this.client.user.create({
+        data: {
+          email,
+          name: nameHint ?? email.split("@")[0],
+        },
+      });
+      return mapUser(created);
+    },
+    getById: async (id: string) => {
+      const user = await this.client.user.findUnique({ where: { id } });
+      return user ? mapUser(user) : null;
+    },
+  };
 
-  async getUserById(id: string): Promise<User | null> {
-    const user = await this.client.user.findUnique({ where: { id } });
-    return user ? mapUser(user) : null;
-  }
+  readonly habit: IHabitRepo = {
+    listByUser: async (userId: string) => {
+      const habits = await this.client.habit.findMany({
+        where: { userId },
+        orderBy: { createdAt: "asc" },
+      });
+      return habits.map(mapHabit);
+    },
+    create: async (userId: string, input: CreateHabitRequest) => {
+      const created = await this.client.habit.create({
+        data: {
+          userId,
+          name: input.name,
+          targetType: input.targetType.toUpperCase() as PrismaTargetType,
+          targetValue: input.targetValue,
+        },
+      });
+      return mapHabit(created);
+    },
+  };
 
-  async listHabits(userId: string): Promise<Habit[]> {
-    const habits = await this.client.habit.findMany({
-      where: { userId },
-      orderBy: { createdAt: "asc" },
-    });
-    return habits.map(mapHabit);
-  }
-
-  async createHabit(userId: string, input: CreateHabitRequest): Promise<Habit> {
-    const created = await this.client.habit.create({
-      data: {
-        userId,
-        name: input.name,
-        targetType: input.targetType.toUpperCase() as PrismaTargetType,
-        targetValue: input.targetValue,
-      },
-    });
-    return mapHabit(created);
-  }
-
-  async upsertCheckins(items: UpsertCheckinsRequest["items"]): Promise<void> {
-    const today = startOfDay(new Date());
-    await Promise.all(
-      items.map((item) =>
-        this.client.checkin.upsert({
-          where: {
-            habitId_date: {
+  readonly checkin: ICheckinRepo = {
+    upsertToday: async (
+      _userId: string,
+      items: UpsertCheckinsRequest["items"],
+    ) => {
+      const today = startOfDay(new Date());
+      await Promise.all(
+        items.map((item) =>
+          this.client.checkin.upsert({
+            where: {
+              habitId_date: {
+                habitId: item.habitId,
+                date: today,
+              },
+            },
+            update: {
+              value: item.value,
+            },
+            create: {
               habitId: item.habitId,
               date: today,
+              value: item.value,
             },
-          },
-          update: {
-            value: item.value,
-          },
-          create: {
-            habitId: item.habitId,
-            date: today,
-            value: item.value,
-          },
-        }),
-      ),
-    );
-  }
+          }),
+        ),
+      );
+    },
+  };
 
-  async getSummary(
-    userId: string,
-    window: "7" | "28" | "all",
-  ): Promise<Summary> {
-    const habits = await this.client.habit.findMany({
-      where: { userId },
-      include: { checkins: true },
-    });
-    return buildSummary(
-      habits.map((habit) => ({
-        id: habit.id,
-        checkins: habit.checkins.map((checkin: PrismaCheckin) => ({
-          date: checkin.date,
-          value: checkin.value,
+  readonly analytics: IAnalyticsRepo = {
+    summary: async (userId: string, window: "7" | "28" | "all") => {
+      const habits = await this.client.habit.findMany({
+        where: { userId },
+        include: { checkins: true },
+      });
+      return buildSummary(
+        habits.map((habit) => ({
+          id: habit.id,
+          checkins: habit.checkins.map((checkin: PrismaCheckin) => ({
+            date: checkin.date,
+            value: checkin.value,
+          })),
         })),
-      })),
-      window,
-    );
-  }
+        window,
+      );
+    },
+  };
 
-  async createNudge(userId: string, request: NudgeRequest): Promise<Nudge> {
-    const message =
-      typeof request.context?.message === "string"
-        ? request.context.message
-        : "Keep pushing toward your goals!";
+  readonly ai: IAIRepo = {
+    nudge: async (userId: string, request: NudgeRequest) => {
+      const message =
+        typeof request.context?.message === "string"
+          ? request.context.message
+          : "Keep pushing toward your goals!";
 
-    const created = await this.client.nudge.create({
-      data: {
-        userId,
-        channel: NudgeChannel.INAPP,
-        message,
-        context: (request.context ?? {}) as Prisma.InputJsonValue,
-      },
-    });
-    return mapNudge(created);
-  }
-
-  async listRecommendations(userId: string): Promise<Recommendation[]> {
-    const recommendations = await this.client.recommendation.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
-    return recommendations.map(mapRecommendation);
-  }
+      const created = await this.client.nudge.create({
+        data: {
+          userId,
+          channel: NudgeChannel.INAPP,
+          message,
+          context: (request.context ?? {}) as Prisma.InputJsonValue,
+        },
+      });
+      return mapNudge(created);
+    },
+    recommendations: async (userId: string) => {
+      const recommendations = await this.client.recommendation.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      });
+      return recommendations.map(mapRecommendation);
+    },
+  };
 }
 
 export { PrismaRepo };

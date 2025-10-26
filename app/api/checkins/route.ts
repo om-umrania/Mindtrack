@@ -8,11 +8,11 @@ import type { IRepository } from "@/src/server/interfaces";
 const DEMO_USER_ID = "demo";
 
 async function resolveDemoUserId(repo: IRepository): Promise<string> {
-  const existing = await repo.getUserById(DEMO_USER_ID);
+  const existing = await repo.user.getById(DEMO_USER_ID);
   if (existing) {
     return existing.id;
   }
-  const fallback = await repo.findOrCreateUserByEmail(
+  const fallback = await repo.user.findOrCreateByEmail(
     "demo@mindtrack.dev",
     "Demo",
   );
@@ -30,7 +30,7 @@ export const POST = withRateLimit(async (request: Request) => {
 
     const repo = await getRepo();
     const userId = await resolveDemoUserId(repo);
-    await repo.upsertCheckins(parsed.data.items);
+    await repo.checkin.upsertToday(userId, parsed.data.items);
 
     return jsonOk({ ok: true, count: parsed.data.items.length });
   } catch (error) {

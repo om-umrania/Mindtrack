@@ -10,31 +10,38 @@ import type {
 } from "@/app/lib/types";
 
 export interface IUserRepo {
-  findOrCreateUserByEmail(email: string, nameHint?: string): Promise<User>;
-  getUserById(id: string): Promise<User | null>;
+  findOrCreateByEmail(email: string, nameHint?: string): Promise<User>;
+  getById(id: string): Promise<User | null>;
 }
 
 export interface IHabitRepo {
-  listHabits(userId: string): Promise<Habit[]>;
-  createHabit(userId: string, input: CreateHabitRequest): Promise<Habit>;
-  upsertCheckins(items: UpsertCheckinsRequest["items"]): Promise<void>;
+  listByUser(userId: string): Promise<Habit[]>;
+  create(userId: string, input: CreateHabitRequest): Promise<Habit>;
+}
+
+export interface ICheckinRepo {
+  upsertToday(
+    userId: string,
+    items: UpsertCheckinsRequest["items"],
+  ): Promise<void>;
 }
 
 export interface IAnalyticsRepo {
-  getSummary(userId: string, window: "7" | "28" | "all"): Promise<Summary>;
+  summary(userId: string, window: "7" | "28" | "all"): Promise<Summary>;
 }
 
 export interface IAIRepo {
-  createNudge(userId: string, request: NudgeRequest): Promise<Nudge>;
-  listRecommendations(userId: string): Promise<Recommendation[]>;
+  nudge(userId: string, request: NudgeRequest): Promise<Nudge>;
+  recommendations(userId: string): Promise<Recommendation[]>;
 }
 
 export type RepoKind = "prisma" | "memory";
 
-export interface IRepository
-  extends IUserRepo,
-    IHabitRepo,
-    IAnalyticsRepo,
-    IAIRepo {
+export interface IRepository {
   readonly kind: RepoKind;
+  readonly user: IUserRepo;
+  readonly habit: IHabitRepo;
+  readonly checkin: ICheckinRepo;
+  readonly analytics: IAnalyticsRepo;
+  readonly ai: IAIRepo;
 }
