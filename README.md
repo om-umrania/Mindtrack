@@ -65,19 +65,18 @@ Environment variables live in `.env.local`. Start from `.env.example`, which inc
 
 ## Database & Prisma
 
-1. Launch a local Postgres instance (example via Docker):
+1. Launch a local Postgres instance (example via Docker Compose):
    ```bash
-   docker run --name mindtrack-postgres -p 5432:5432 \
-     -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
-     -e POSTGRES_DB=mindtrack -d postgres:16
+   docker compose -f docker-compose.db.yml up -d
    ```
+   The service listens on `localhost:5432`. Stop it anytime with `docker compose -f docker-compose.db.yml down`.
 2. Update `.env.local` with the matching `DATABASE_URL`, e.g.  
-   `postgresql://postgres:postgres@localhost:5432/mindtrack?schema=public`
+   `postgres://postgres:postgres@localhost:5432/mindtrack`
 3. Run Prisma workflows:
    ```bash
    npm run db:gen       # Generate Prisma Client
    npm run db:migrate   # Apply migrations (create if none exist)
-   npm run db:seed      # Seed demo data
+   npm run db:seed      # Seed demo data (after migrations)
    ```
    These scripts automatically load credentials from `.env.local`; ensure it exists before running them.
 4. Start the app as usual with `npm run dev` (mock APIs still load in development).

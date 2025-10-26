@@ -122,8 +122,8 @@ class PrismaRepo implements IRepository {
 
   readonly checkin: ICheckinRepo = {
     upsertToday: async (
-      _userId: string,
       items: UpsertCheckinsRequest["items"],
+      _userId: string,
     ) => {
       const today = startOfDay(new Date());
       await Promise.all(

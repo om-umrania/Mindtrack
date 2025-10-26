@@ -1,125 +1,110 @@
-import { PrismaClient, TargetType, NudgeChannel } from "@prisma/client";
-import { subDays, startOfDay } from "date-fns";
+import { PrismaClient, TargetType } from "@prisma/client";
+import { startOfDay, subDays } from "date-fns";
 
 const prisma = new PrismaClient();
+const DEMO_EMAIL = "demo@mindtrack.app";
+const DEMO_USER_ID = "demo";
 
-async function main() {
-  await prisma.checkin.deleteMany();
-  await prisma.nudge.deleteMany();
-  await prisma.recommendation.deleteMany();
-  await prisma.habit.deleteMany();
-  await prisma.user.deleteMany();
+export async function run() {
+  const today = startOfDay(new Date());
 
-  const user = await prisma.user.create({
-    data: {
-      name: "Avery",
-      email: "avery@example.com",
+  const user = await prisma.user.upsert({
+    where: { email: DEMO_EMAIL },
+    update: { name: "Demo User" },
+    create: {
+      id: DEMO_USER_ID,
+      email: DEMO_EMAIL,
+      name: "Demo User",
     },
   });
 
-  const meditation = await prisma.habit.create({
-    data: {
-      name: "Morning Meditation",
-      targetType: TargetType.DURATION,
-      targetValue: 10,
-      userId: user.id,
-    },
-  });
-
-  const walk = await prisma.habit.create({
-    data: {
-      name: "Daily Walk",
-      targetType: TargetType.DURATION,
-      targetValue: 30,
-      userId: user.id,
-    },
-  });
-
-  const hydration = await prisma.habit.create({
-    data: {
-      name: "Hydration",
-      targetType: TargetType.COUNT,
-      targetValue: 8,
-      userId: user.id,
-    },
-  });
-
-  const createCheckins = async (
-    habitId: string,
-    values: Array<{ offset: number; value: number }>,
-  ) => {
-    if (!values.length) return;
-
-    await prisma.checkin.createMany({
-      data: values.map(({ offset, value }) => ({
-        habitId,
-        date: subDays(startOfDay(new Date()), offset),
-        value,
-      })),
-    });
-  };
-
-  await createCheckins(meditation.id, [
-    { offset: 0, value: 1 },
-    { offset: 1, value: 1 },
-    { offset: 2, value: 0 },
-    { offset: 3, value: 1 },
-    { offset: 4, value: 1 },
+  const habits = await Promise.all([
+    prisma.habit.upsert({
+      where: { id: "habit_morning_meditation" },
+      update: {
+        name: "Morning Meditation",
+        targetType: TargetType.DURATION,
+        targetValue: 10,
+        isActive: true,
+        userId: user.id,
+      },
+      create: {
+        id: "habit_morning_meditation",
+        userId: user.id,
+        name: "Morning Meditation",
+        targetType: TargetType.DURATION,
+        targetValue: 10,
+        isActive: true,
+      },
+    }),
+    prisma.habit.upsert({
+      where: { id: "habit_daily_walk" },
+      update: {
+        name: "Daily Walk",
+        targetType: TargetType.DURATION,
+        targetValue: 30,
+        isActive: true,
+        userId: user.id,
+      },
+      create: {
+        id: "habit_daily_walk",
+        userId: user.id,
+        name: "Daily Walk",
+        targetType: TargetType.DURATION,
+        targetValue: 30,
+        isActive: true,
+      },
+    }),
   ]);
 
-  await createCheckins(
-    walk.id,
-    Array.from({ length: 7 }).map((_, index) => ({
-      offset: index,
-      value: 1,
-    })),
-  );
+  const habitIds = habits.map((habit) => habit.id);
 
-  await createCheckins(hydration.id, [
-    { offset: 0, value: 7 },
-    { offset: 1, value: 8 },
-    { offset: 2, value: 5 },
-    { offset: 3, value: 6 },
-    { offset: 4, value: 8 },
-  ]);
-
-  await prisma.nudge.create({
-    data: {
-      userId: user.id,
-      channel: NudgeChannel.INAPP,
-      message:
-        "You’re one check-in away from beating your best streak. Log a task to keep momentum!",
-      context: {
-        highlightHabit: "Daily Walk",
-        streakTarget: 7,
+  await prisma.checkin.deleteMany({
+    where: {
+      habitId: { in: habitIds },
+      date: {
+        gte: subDays(today, 14),
       },
     },
   });
 
-  await prisma.recommendation.createMany({
-    data: [
-      {
-        userId: user.id,
-        habitName: "Morning Meditation",
-        rationale:
-          "Try moving meditation to the same time each day to reinforce the routine.",
-      },
-      {
-        userId: user.id,
-        habitName: "Hydration",
-        rationale:
-          "Set a refill reminder at lunchtime to close the afternoon dip.",
-      },
-    ],
-  });
+  const checkinPlan: Array<{ habitId: string; values: number[] }> = [
+    {
+      habitId: "habit_morning_meditation",
+      values: [1, 1, 0, 1, 1, 0, 1],
+    },
+    {
+      habitId: "habit_daily_walk",
+      values: [1, 1, 1, 0, 1, 1, 1],
+    },
+  ];
+
+  for (const plan of checkinPlan) {
+    const data = plan.values.map((value, index) => ({
+      habitId: plan.habitId,
+      date: subDays(today, index),
+      value,
+    }));
+
+    if (data.length > 0) {
+      await prisma.checkin.createMany({ data });
+    }
+  }
+
+  console.log("Seeded demo data for user:", user.email);
 }
 
-main()
-  .then(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(async (error) => {
-    console.error("Seed error", error);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+const isDirectRun =
+  process.argv[1] &&
+  new URL(`file://${process.argv[1]}`).href === import.meta.url;
+
+if (isDirectRun) {
+  run()
+    .catch((error) => {
+      console.error("Seed error", error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

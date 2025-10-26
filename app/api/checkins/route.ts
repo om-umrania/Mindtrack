@@ -30,7 +30,7 @@ export const POST = withRateLimit(async (request: Request) => {
 
     const repo = await getRepo();
     const userId = await resolveDemoUserId(repo);
-    await repo.checkin.upsertToday(userId, parsed.data.items);
+    await repo.checkin.upsertToday(parsed.data.items, userId);
 
     return jsonOk({ ok: true, count: parsed.data.items.length });
   } catch (error) {

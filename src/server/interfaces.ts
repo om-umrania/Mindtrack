@@ -21,8 +21,8 @@ export interface IHabitRepo {
 
 export interface ICheckinRepo {
   upsertToday(
-    userId: string,
     items: UpsertCheckinsRequest["items"],
+    userId: string,
   ): Promise<void>;
 }
 
