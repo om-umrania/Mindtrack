@@ -1,4 +1,4 @@
-import { rest } from "msw";
+import { http, HttpResponse, delay } from "msw";
 import type {
   Habit,
   Summary,
@@ -114,51 +114,54 @@ const mockRecommendations: Recommendation[] = [
 ];
 
 export const handlers = [
-  rest.post("/api/auth/login", async (req, res, ctx) => {
-    const { email } = await req.json<{ email?: string }>();
-    return res(
-      ctx.delay(400),
-      ctx.status(200),
-      ctx.json({
+  http.post("/api/auth/login", async ({ request }) => {
+    const { email } = (await request.json()) as { email?: string };
+    await delay(400);
+    return HttpResponse.json(
+      {
         ...mockUser,
         email: email ?? mockUser.email,
         name: email ? email.split("@")[0] : mockUser.name,
-      }),
+      },
+      { status: 200 },
     );
   }),
 
-  rest.get("/api/habits", (_req, res, ctx) => {
-    return res(ctx.delay(300), ctx.status(200), ctx.json(mockHabits));
+  http.get("/api/habits", async () => {
+    await delay(300);
+    return HttpResponse.json(mockHabits, { status: 200 });
   }),
 
-  rest.post("/api/habits", async (req, res, ctx) => {
-    const body = await req.json<Partial<Habit>>();
+  http.post("/api/habits", async ({ request }) => {
+    const body = (await request.json()) as Partial<Habit> | null;
     const created: Habit = {
       id: `habit_${mockHabits.length + 1}`,
       userId: mockUser.id,
-      name: body.name ?? "New Habit",
-      targetType: body.targetType ?? "boolean",
-      targetValue: body.targetValue ?? 1,
+      name: body?.name ?? "New Habit",
+      targetType: body?.targetType ?? "boolean",
+      targetValue: body?.targetValue ?? 1,
       isActive: true,
     };
     mockHabits.push(created);
-    return res(ctx.status(201), ctx.json(created));
+    return HttpResponse.json(created, { status: 201 });
   }),
 
-  rest.post("/api/checkins", async (_req, res, ctx) => {
-    return res(ctx.status(204));
+  http.post("/api/checkins", async () => {
+    return new HttpResponse(null, { status: 204 });
   }),
 
-  rest.get("/api/analytics/summary", (req, res, ctx) => {
-    const windowParam = (req.url.searchParams.get("window") ?? "7") as
+  http.get("/api/analytics/summary", async ({ request }) => {
+    const url = new URL(request.url);
+    const windowParam = (url.searchParams.get("window") ?? "7") as
       | "7"
       | "28"
       | "all";
     const summary = summaryByWindow[windowParam] ?? summaryByWindow["all"];
-    return res(ctx.delay(250), ctx.status(200), ctx.json(summary));
+    await delay(250);
+    return HttpResponse.json(summary, { status: 200 });
   }),
 
-  rest.post("/api/ai/nudge", async (_req, res, ctx) => {
+  http.post("/api/ai/nudge", async () => {
     const nudge: Nudge = {
       id: "nudge_1",
       userId: mockUser.id,
@@ -170,10 +173,11 @@ export const handlers = [
         highlightHabit: "Daily Walk",
       },
     };
-    return res(ctx.status(200), ctx.json(nudge));
+    return HttpResponse.json(nudge, { status: 200 });
   }),
 
-  rest.get("/api/ai/recommendations", (_req, res, ctx) => {
-    return res(ctx.delay(200), ctx.status(200), ctx.json(mockRecommendations));
+  http.get("/api/ai/recommendations", async () => {
+    await delay(200);
+    return HttpResponse.json(mockRecommendations, { status: 200 });
   }),
 ];

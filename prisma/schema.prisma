@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TargetType {
+  BOOLEAN
+  COUNT
+  DURATION
+}
+
+enum NudgeChannel {
+  INAPP
+  EMAIL
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String
+  createdAt       DateTime         @default(now())
+  habits          Habit[]
+  nudges          Nudge[]
+  recommendations Recommendation[]
+}
+
+model Habit {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  targetType  TargetType
+  targetValue Int
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkins Checkin[]
+
+  @@index([userId])
+}
+
+model Checkin {
+  id        String   @id @default(cuid())
+  habitId   String
+  date      DateTime
+  value     Int
+  createdAt DateTime @default(now())
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([date])
+}
+
+model Nudge {
+  id        String       @id @default(cuid())
+  userId    String
+  channel   NudgeChannel @default(INAPP)
+  message   String
+  context   Json
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  userId    String
+  habitName String
+  rationale String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}

@@ -19,6 +19,7 @@ Mindtrack is a Next.js 14 habit tracker that blends progress dashboards, AI nudg
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 # App runs at http://localhost:3000 with MSW mocks automatically enabled in development
 ```
@@ -53,6 +54,33 @@ MSW intercepts `/api/*` calls in development to provide realistic responses for 
 - Follow the conventions in `AGENTS.md` for commit hygiene, testing expectations, and PR checklists.  
 - Run `npm run lint` and `npm run typecheck` locally before pushing; CI enforces the same gates.  
 - For UI changes, capture screenshots and attach them to your pull request template.
+
+## Environment
+
+Environment variables live in `.env.local`. Start from `.env.example`, which includes:
+
+- `DATABASE_URL` – connection string used by Prisma (PostgreSQL by default).  
+- `NEXT_PUBLIC_DEMO` – toggles demo mode banner and mock auth behaviour.  
+- `NEXT_PUBLIC_AI_ON` – enables AI-driven nudges and recommendations in the UI.
+
+## Database & Prisma
+
+1. Launch a local Postgres instance (example via Docker):
+   ```bash
+   docker run --name mindtrack-postgres -p 5432:5432 \
+     -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+     -e POSTGRES_DB=mindtrack -d postgres:16
+   ```
+2. Update `.env.local` with the matching `DATABASE_URL`, e.g.  
+   `postgresql://postgres:postgres@localhost:5432/mindtrack?schema=public`
+3. Run Prisma workflows:
+   ```bash
+   npm run db:gen       # Generate Prisma Client
+   npm run db:migrate   # Apply migrations (create if none exist)
+   npm run db:seed      # Seed demo data
+   ```
+   These scripts automatically load credentials from `.env.local`; ensure it exists before running them.
+4. Start the app as usual with `npm run dev` (mock APIs still load in development).
 
 ## License
 

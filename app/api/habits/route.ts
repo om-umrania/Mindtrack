@@ -1,47 +1,59 @@
-import { NextRequest, NextResponse } from 'next/server'
+"use server";
 
-const mockHabits = [
-  {
-    id: '1',
-    userId: '1',
-    name: 'Drink Water',
-    targetType: 'count' as const,
-    targetValue: 8,
-    isActive: true
-  },
-  {
-    id: '2',
-    userId: '1',
-    name: 'Exercise',
-    targetType: 'boolean' as const,
-    targetValue: 1,
-    isActive: true
-  },
-  {
-    id: '3',
-    userId: '1',
-    name: 'Read',
-    targetType: 'duration' as const,
-    targetValue: 30,
-    isActive: true
+import { HabitCreateSchema } from "@/src/server/validation";
+import { withRateLimit, jsonOk, jsonErr } from "@/src/server/http";
+import { getRepo } from "@/src/server/repo";
+import type { IRepository } from "@/src/server/interfaces";
+
+const DEMO_USER_ID = "demo";
+
+async function resolveDemoUserId(repo: IRepository): Promise<string> {
+  const existing = await repo.getUserById(DEMO_USER_ID);
+  if (existing) {
+    return existing.id;
   }
-]
 
-export async function GET() {
-  return NextResponse.json(mockHabits)
+  const fallback = await repo.findOrCreateUserByEmail(
+    "demo@mindtrack.dev",
+    "Demo",
+  );
+  return fallback.id;
 }
 
-export async function POST(request: NextRequest) {
-  const body = await request.json()
-  
-  const newHabit = {
-    id: Math.random().toString(36).substr(2, 9),
-    userId: '1',
-    name: body.name,
-    targetType: body.targetType,
-    targetValue: body.targetValue,
-    isActive: true
+export const GET = withRateLimit(async (request: Request) => {
+  try {
+    const repo = await getRepo();
+    const userId = await resolveDemoUserId(repo);
+    const habits = await repo.listHabits(userId);
+    return jsonOk({ ok: true, habits });
+  } catch (error) {
+    console.error("[habits] failed to list habits", error);
+    return jsonErr("Unable to fetch habits", 500);
   }
-  
-  return NextResponse.json(newHabit)
-}
+});
+
+export const POST = withRateLimit(async (request: Request) => {
+  try {
+    const body = await request.json();
+    const parsed = HabitCreateSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return jsonErr("Invalid habit payload", 422);
+    }
+
+    const repo = await getRepo();
+    const userId = await resolveDemoUserId(repo);
+    const habit = await repo.createHabit(userId, parsed.data);
+
+    return jsonOk(
+      {
+        ok: true,
+        habit,
+      },
+      201,
+    );
+  } catch (error) {
+    console.error("[habits] failed to create habit", error);
+    return jsonErr("Unable to create habit", 500);
+  }
+});
