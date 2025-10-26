@@ -14,7 +14,10 @@ async function initializeRepository(): Promise<IRepository> {
 
   try {
     const prisma = getPrisma();
-    await prisma.user.count();
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Prisma ping timeout")), 1000),
+    );
+    await Promise.race([prisma.$queryRaw`SELECT 1`, timeout]);
     console.info("[repo] Connected to database, using Prisma repository.");
     return new PrismaRepo();
   } catch (error) {
@@ -34,4 +37,8 @@ export function getRepo(): Promise<IRepository> {
     repoPromise = initializeRepository();
   }
   return repoPromise;
+}
+
+export async function getRepoCached(): Promise<IRepository> {
+  return getRepo();
 }

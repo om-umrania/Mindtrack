@@ -77,7 +77,7 @@ const mapRecommendation = (
 
 const repoWarned = {
   user: false,
-} as Record<"user", boolean>;
+} as const;
 
 class PrismaRepo implements IRepository {
   readonly kind = "prisma" as const;

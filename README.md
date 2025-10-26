@@ -19,7 +19,7 @@ Mindtrack is a Next.js 14 habit tracker that blends progress dashboards, AI nudg
 
 ```bash
 npm install
-cp .env.example .env.local
+cp .env.example .env
 npm run dev
 # App runs at http://localhost:3000 with MSW mocks automatically enabled in development
 ```
@@ -57,11 +57,12 @@ MSW intercepts `/api/*` calls in development to provide realistic responses for 
 
 ## Environment
 
-Environment variables live in `.env.local`. Start from `.env.example`, which includes:
+Environment variables live in `.env`. Start from `.env.example`, which includes:
 
 - `DATABASE_URL` – connection string used by Prisma (PostgreSQL by default).  
 - `NEXT_PUBLIC_DEMO` – toggles demo mode banner and mock auth behaviour.  
 - `NEXT_PUBLIC_AI_ON` – enables AI-driven nudges and recommendations in the UI.
+- `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` – auth provider credentials (optional while demo auth is in place).
 
 ## Database & Prisma
 
@@ -70,7 +71,7 @@ Environment variables live in `.env.local`. Start from `.env.example`, which inc
    docker compose -f docker-compose.db.yml up -d
    ```
    The service listens on `localhost:5432`. Stop it anytime with `docker compose -f docker-compose.db.yml down`.
-2. Update `.env.local` with the matching `DATABASE_URL`, e.g.  
+2. Update `.env` with the matching `DATABASE_URL`, e.g.  
    `postgres://postgres:postgres@localhost:5432/mindtrack`
 3. Run Prisma workflows:
    ```bash
@@ -78,8 +79,33 @@ Environment variables live in `.env.local`. Start from `.env.example`, which inc
    npm run db:migrate   # Apply migrations (create if none exist)
    npm run db:seed      # Seed demo data (after migrations)
    ```
-   These scripts automatically load credentials from `.env.local`; ensure it exists before running them.
+   These scripts read credentials from `.env`; ensure it exists before running them.
 4. Start the app as usual with `npm run dev` (mock APIs still load in development).
+
+## Deploying to Production
+
+1. **Environment variables**  
+   Configure the following in your hosting platform (e.g., Vercel):
+   - `DATABASE_URL`
+   - `NEXT_PUBLIC_DEMO`
+   - `NEXT_PUBLIC_AI_ON`
+   - `CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY`
+
+2. **Database migrations**  
+   At deploy-time, run:
+   ```bash
+   npm run db:gen
+   npm run db:migrate
+   npm run db:seed   # optional: populate demo data
+   ```
+   `db:migrate` uses `prisma migrate deploy`, which safely applies existing migrations.
+
+3. **Vercel configuration**  
+   `vercel.json` enables clean URLs. `postinstall` automatically runs `prisma generate`, so the Prisma client is ready before the Next.js build.
+
+4. **Smoke test endpoints**  
+   After deployment, hit `/api/health` to confirm the live backend can reach the database.
 
 ## License
 

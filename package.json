@@ -7,14 +7,15 @@
     "build": "next build",
     "start": "next start",
     "start:api": "next start",
-    "db:gen": "dotenv -e .env.local -- prisma generate",
-    "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
-    "db:seed": "dotenv -e .env.local -- tsx prisma/seed.ts",
+    "db:gen": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
     "lint": "next lint",
     "test": "vitest run",
     "e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

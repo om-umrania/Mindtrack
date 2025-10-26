@@ -9,6 +9,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mindtrack
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
       - name: Checkout repository
@@ -22,6 +33,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Prisma generate (if DATABASE_URL)
+        run: npm run db:gen
+        env:
+          DATABASE_URL: ${{ vars.DATABASE_URL || '' }}
+        if: ${{ env.DATABASE_URL != '' }}
+
+      - name: Prisma migrate (if DATABASE_URL)
+        run: npm run db:migrate -- --skip-generate
+        env:
+          DATABASE_URL: ${{ vars.DATABASE_URL || '' }}
+        if: ${{ env.DATABASE_URL != '' }}
 
       - name: Lint
         run: npm run lint
