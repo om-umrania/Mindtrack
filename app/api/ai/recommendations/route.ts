@@ -5,25 +5,15 @@ import { withRateLimit, jsonOk, jsonErr } from "@/src/server/http";
 import { getRepoCached } from "@/src/server/repo";
 import type { IRepository } from "@/src/server/interfaces";
 import type { Recommendation } from "@/app/lib/types";
+import { getAuthenticatedUser } from "@/src/server/auth";
 
-const DEMO_USER_ID = "demo";
-
-async function resolveDemoUserId(repo: IRepository): Promise<string> {
-  const existing = await repo.user.getById(DEMO_USER_ID);
-  if (existing) {
-    return existing.id;
-  }
-  const fallback = await repo.user.findOrCreateByEmail(
-    "demo@mindtrack.dev",
-    "Demo",
-  );
-  return fallback.id;
-}
+const DEMO_ENABLED = process.env.NEXT_PUBLIC_DEMO === "true";
+const DEMO_EMAIL = "demo@mindtrack.dev";
 
 const FALLBACK_RECOMMENDATIONS: Recommendation[] = [
   {
     id: "rec_demo_focus",
-    userId: DEMO_USER_ID,
+    userId: "demo",
     createdAt: new Date().toISOString(),
     habitName: "Mindful Breathing",
     rationale:
@@ -31,7 +21,7 @@ const FALLBACK_RECOMMENDATIONS: Recommendation[] = [
   },
   {
     id: "rec_demo_walk",
-    userId: DEMO_USER_ID,
+    userId: "demo",
     createdAt: new Date().toISOString(),
     habitName: "Evening Walk",
     rationale:
@@ -39,10 +29,33 @@ const FALLBACK_RECOMMENDATIONS: Recommendation[] = [
   },
 ];
 
-export const GET = withRateLimit(async (request: Request) => {
+async function resolveUserId(repo: IRepository): Promise<string | null> {
+  const authUser = await getAuthenticatedUser();
+  if (authUser && authUser.email) {
+    const record = await repo.user.findOrCreateByEmail(authUser.email, {
+      nameHint: authUser.name,
+      clerkId: authUser.userId,
+    });
+    return record.id;
+  }
+
+  if (DEMO_ENABLED) {
+    const demo = await repo.user.findOrCreateByEmail(DEMO_EMAIL, {
+      nameHint: "Demo User",
+    });
+    return demo.id;
+  }
+
+  return null;
+}
+
+export const GET = withRateLimit(async () => {
   try {
     const repo = await getRepoCached();
-    const userId = await resolveDemoUserId(repo);
+    const userId = await resolveUserId(repo);
+    if (!userId) {
+      return jsonErr("Not authenticated", 401);
+    }
 
     if (!AI_ON) {
       return jsonOk({

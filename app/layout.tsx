@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
@@ -18,7 +19,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
+  const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  const content = (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <MswProvider />
@@ -35,5 +38,20 @@ export default function RootLayout({
         </ThemeProvider>
       </body>
     </html>
+  );
+
+  if (!clerkPublishableKey) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is not set. Clerk components will fall back to demo mode.",
+      );
+    }
+    return content;
+  }
+
+  return (
+    <ClerkProvider publishableKey={clerkPublishableKey}>
+      {content}
+    </ClerkProvider>
   );
 }

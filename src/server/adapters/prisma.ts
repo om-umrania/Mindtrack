@@ -45,6 +45,7 @@ const mapUser = (user: PrismaUser): User => ({
   id: user.id,
   email: user.email,
   name: user.name,
+  clerkId: user.clerkId ?? undefined,
 });
 
 const mapHabit = (habit: PrismaHabit): Habit => ({
@@ -75,30 +76,51 @@ const mapRecommendation = (
   rationale: recommendation.rationale,
 });
 
-const repoWarned = {
-  user: false,
-} as const;
-
 class PrismaRepo implements IRepository {
   readonly kind = "prisma" as const;
   private client = getPrisma();
 
   readonly user: IUserRepo = {
-    findOrCreateByEmail: async (email: string, nameHint?: string) => {
+    findOrCreateByEmail: async (email: string, options) => {
+      const nameHint = options?.nameHint;
+      const clerkId = options?.clerkId;
+
+      if (clerkId) {
+        const byClerk = await this.client.user.findUnique({
+          where: { clerkId },
+        });
+        if (byClerk) {
+          return mapUser(byClerk);
+        }
+      }
+
       const existing = await this.client.user.findUnique({ where: { email } });
       if (existing) {
+        if (clerkId && existing.clerkId !== clerkId) {
+          const updated = await this.client.user.update({
+            where: { id: existing.id },
+            data: { clerkId },
+          });
+          return mapUser(updated);
+        }
         return mapUser(existing);
       }
+
       const created = await this.client.user.create({
         data: {
           email,
           name: nameHint ?? email.split("@")[0],
+          clerkId,
         },
       });
       return mapUser(created);
     },
     getById: async (id: string) => {
       const user = await this.client.user.findUnique({ where: { id } });
+      return user ? mapUser(user) : null;
+    },
+    getByClerkId: async (clerkId: string) => {
+      const user = await this.client.user.findUnique({ where: { clerkId } });
       return user ? mapUser(user) : null;
     },
   };

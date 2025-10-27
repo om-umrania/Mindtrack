@@ -62,7 +62,7 @@ Environment variables live in `.env`. Start from `.env.example`, which includes:
 - `DATABASE_URL` – connection string used by Prisma (PostgreSQL by default).  
 - `NEXT_PUBLIC_DEMO` – toggles demo mode banner and mock auth behaviour.  
 - `NEXT_PUBLIC_AI_ON` – enables AI-driven nudges and recommendations in the UI.
-- `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` – auth provider credentials (optional while demo auth is in place).
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` – Clerk credentials used for user authentication (optional if running in demo mode).
 
 ## Database & Prisma
 
@@ -89,8 +89,19 @@ Environment variables live in `.env`. Start from `.env.example`, which includes:
    - `DATABASE_URL`
    - `NEXT_PUBLIC_DEMO`
    - `NEXT_PUBLIC_AI_ON`
-   - `CLERK_PUBLISHABLE_KEY`
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
    - `CLERK_SECRET_KEY`
+
+   On Vercel, set the publishable key under **Environment Variables** with the `NEXT_PUBLIC_` prefix so it is exposed to the browser, and keep `CLERK_SECRET_KEY` scoped to server-only.
+
+   ```text
+   Environment Variable                 Example Value
+   ---------------------                -------------------------------
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY    pk_live_your_publishable_key
+   CLERK_SECRET_KEY                     sk_live_your_secret_key
+   ```
+
+   Remember to redeploy after updating environment variables.
 
 2. **Database migrations**  
    At deploy-time, run:

@@ -1,69 +1,65 @@
-"use client"
+"use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import { User } from '@/app/lib/types'
+import React, { createContext, useContext, useMemo } from "react";
+import { useClerk, useUser } from "@clerk/nextjs";
+import { User } from "@/app/lib/types";
 
 interface AuthContextType {
-  user: User | null
-  login: (email: string) => Promise<void>
-  logout: () => void
-  isLoading: boolean
+  user: User | null;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+  isLoading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function mapClerkUserToAppUser(
+  clerkUser: ReturnType<typeof useUser>["user"],
+): User | null {
+  if (!clerkUser) return null;
+  const primaryEmail = clerkUser.primaryEmailAddress?.emailAddress ?? "";
+  const displayName =
+    clerkUser.fullName || clerkUser.username || primaryEmail || clerkUser.id;
+
+  return {
+    id: clerkUser.id,
+    name: displayName,
+    email: primaryEmail,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const { user: clerkUser, isLoaded } = useUser();
+  const { openSignIn, signOut } = useClerk();
 
-  useEffect(() => {
-    // Check for existing session on mount
-    const storedUser = localStorage.getItem('mindtrack-user')
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        localStorage.removeItem('mindtrack-user')
+  const value = useMemo<AuthContextType>(() => {
+    const appUser = mapClerkUserToAppUser(clerkUser);
+
+    const login = async () => {
+      if (typeof window !== "undefined") {
+        await openSignIn({ redirectUrl: "/dashboard" });
       }
-    }
-    setIsLoading(false)
-  }, [])
+    };
 
-  const login = async (email: string) => {
-    setIsLoading(true)
-    try {
-      // Demo login - create a mock user
-      const mockUser: User = {
-        id: '1',
-        name: email.split('@')[0],
-        email: email
-      }
-      setUser(mockUser)
-      localStorage.setItem('mindtrack-user', JSON.stringify(mockUser))
-    } catch (error) {
-      console.error('Login failed:', error)
-      throw error
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    const logout = async () => {
+      await signOut();
+    };
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem('mindtrack-user')
-  }
+    return {
+      user: appUser,
+      login,
+      logout,
+      isLoading: !isLoaded,
+    };
+  }, [clerkUser, isLoaded, openSignIn, signOut]);
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error("useAuth must be used within an AuthProvider");
   }
-  return context
+  return context;
 }

@@ -10,8 +10,12 @@ import type {
 } from "@/app/lib/types";
 
 export interface IUserRepo {
-  findOrCreateByEmail(email: string, nameHint?: string): Promise<User>;
+  findOrCreateByEmail(
+    email: string,
+    options?: { nameHint?: string; clerkId?: string },
+  ): Promise<User>;
   getById(id: string): Promise<User | null>;
+  getByClerkId(clerkId: string): Promise<User | null>;
 }
 
 export interface IHabitRepo {

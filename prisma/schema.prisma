@@ -21,6 +21,7 @@ enum NudgeChannel {
 model User {
   id              String           @id @default(cuid())
   email           String           @unique
+  clerkId         String?          @unique
   name            String
   createdAt       DateTime         @default(now())
   habits          Habit[]

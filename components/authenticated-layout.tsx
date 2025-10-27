@@ -1,24 +1,25 @@
-'use client'
+"use client";
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/components/auth-provider'
-import { Navigation } from '@/components/navigation'
-import { Skeleton } from '@/components/ui/skeleton'
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
+import { Navigation } from "@/components/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface AuthenticatedLayoutProps {
-  children: React.ReactNode
+  children: React.ReactNode;
 }
 
 export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
-  const { user, isLoading } = useAuth()
-  const router = useRouter()
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const demoMode = process.env.NEXT_PUBLIC_DEMO === "true";
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/login')
+    if (!isLoading && !user && !demoMode) {
+      router.push("/login");
     }
-  }, [user, isLoading, router])
+  }, [user, isLoading, router, demoMode]);
 
   if (isLoading) {
     return (
@@ -34,7 +35,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
             <div className="space-y-6">
               <Skeleton className="h-8 w-48" />
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3].map(i => (
+                {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-32" />
                 ))}
               </div>
@@ -42,21 +43,19 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
           </main>
         </div>
       </div>
-    )
+    );
   }
 
-  if (!user) {
-    return null
+  if (!user && !demoMode) {
+    return null;
   }
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
       <div className="lg:ml-64">
-        <main className="min-h-screen">
-          {children}
-        </main>
+        <main className="min-h-screen">{children}</main>
       </div>
     </div>
-  )
+  );
 }

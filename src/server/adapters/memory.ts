@@ -101,21 +101,40 @@ class MemoryRepo implements IRepository {
   private recommendations: Recommendation[] = [...initialRecommendations];
 
   readonly user: IUserRepo = {
-    findOrCreateByEmail: async (email: string, nameHint?: string) => {
+    findOrCreateByEmail: async (email: string, options) => {
+      const nameHint = options?.nameHint;
+      const clerkId = options?.clerkId;
+
+      if (clerkId) {
+        const byClerk = this.users.find((user) => user.clerkId === clerkId);
+        if (byClerk) {
+          return byClerk;
+        }
+      }
+
       const existing = this.users.find((user) => user.email === email);
       if (existing) {
+        if (clerkId && existing.clerkId !== clerkId) {
+          existing.clerkId = clerkId;
+        }
+        if (nameHint && !existing.name) {
+          existing.name = nameHint;
+        }
         return existing;
       }
       const created: User = {
         id: randomUUID(),
         email,
         name: nameHint ?? email.split("@")[0],
+        clerkId,
       };
       this.users.push(created);
       return created;
     },
     getById: async (id: string) =>
       this.users.find((user) => user.id === id) ?? null,
+    getByClerkId: async (clerkId: string) =>
+      this.users.find((user) => user.clerkId === clerkId) ?? null,
   };
 
   readonly habit: IHabitRepo = {
